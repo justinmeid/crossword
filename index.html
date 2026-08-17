@@ -1,0 +1,903 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#ffffff" />
+<title>Mini Crossword</title>
+<style>
+  :root{
+    --blue:#9fd2f4;
+    --blue-strong:#4e89e8;
+    --yellow:#ffd917;
+    --black:#111;
+    --grid:#555;
+    --bg:#fff;
+    --text:#111;
+    --muted:#666;
+  }
+  *{box-sizing:border-box}
+  html,body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  body{
+    min-height:100vh;
+    padding-bottom:calc(92px + env(safe-area-inset-bottom));
+  }
+  .app{
+    max-width:760px;
+    margin:0 auto;
+  }
+  header{
+    height:76px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:0 18px;
+    border-bottom:1px solid #e9e9e9;
+    background:#fff;
+    position:sticky;
+    top:0;
+    z-index:20;
+  }
+  .title-wrap{min-width:0}
+  h1{
+    font-size:20px;
+    line-height:1.1;
+    margin:0;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .subtitle{
+    margin-top:4px;
+    color:var(--muted);
+    font-size:12px;
+  }
+  .top-actions{
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .timer{
+    font-variant-numeric:tabular-nums;
+    font-size:19px;
+    min-width:56px;
+    text-align:center;
+  }
+  button{
+    font:inherit;
+    border:0;
+    background:none;
+    color:inherit;
+    cursor:pointer;
+  }
+  .icon-btn{
+    width:40px;
+    height:40px;
+    border-radius:999px;
+    display:grid;
+    place-items:center;
+    font-size:20px;
+  }
+  .icon-btn:active{background:#eee}
+
+  .grid-wrap{
+    padding:14px 10px 8px;
+  }
+  .grid{
+    width:min(100%, 620px);
+    margin:0 auto;
+    display:grid;
+    grid-template-columns:repeat(10, 1fr);
+    border:3px solid var(--black);
+    touch-action:manipulation;
+    user-select:none;
+    background:var(--black);
+    min-height:270px;
+  }
+  .cell{
+    aspect-ratio:1/1;
+    position:relative;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:#fff;
+    border-right:1px solid var(--grid);
+    border-bottom:1px solid var(--grid);
+    font-weight:600;
+    font-size:clamp(20px, 5.8vw, 38px);
+    text-transform:uppercase;
+  }
+  .cell.block{
+    background:var(--black);
+    border-color:var(--black);
+  }
+  .cell.active-entry{background:var(--blue)}
+  .cell.active-cell{background:var(--yellow)}
+  .cell.wrong{color:#d43d36}
+  .num{
+    position:absolute;
+    top:2px;
+    left:3px;
+    font-size:clamp(8px, 2.6vw, 13px);
+    line-height:1;
+    font-weight:500;
+  }
+  .letter{
+    transform:translateY(2px);
+  }
+
+  .status{
+    min-height:28px;
+    text-align:center;
+    font-size:14px;
+    padding:2px 14px 8px;
+    color:#444;
+  }
+  .status.good{color:#1c7c3a;font-weight:600}
+  .status.bad{color:#b22d27;font-weight:600}
+
+  .clues{
+    padding:12px 18px 40px;
+  }
+  .clues h2{
+    font-size:18px;
+    margin:14px 0 7px;
+  }
+  .clue{
+    display:flex;
+    gap:10px;
+    padding:8px 6px;
+    border-radius:8px;
+    line-height:1.35;
+    font-size:16px;
+    cursor:pointer;
+  }
+  .clue:hover,.clue.selected{background:#edf6fc}
+  .clue-num{
+    width:24px;
+    flex:0 0 24px;
+    font-weight:700;
+    text-align:right;
+  }
+
+  .cluebar{
+    position:fixed;
+    left:0;
+    right:0;
+    bottom:0;
+    z-index:30;
+    background:#9ed4f5;
+    padding-bottom:env(safe-area-inset-bottom);
+    box-shadow:0 -1px 0 rgba(0,0,0,.08);
+  }
+  .cluebar-inner{
+    max-width:760px;
+    height:78px;
+    margin:0 auto;
+    display:grid;
+    grid-template-columns:56px 1fr 56px;
+    align-items:center;
+  }
+  .nav{
+    font-size:36px;
+    height:100%;
+  }
+  .current-clue{
+    text-align:center;
+    cursor:pointer;
+    user-select:none;
+    font-size:18px;
+    line-height:1.25;
+    padding:0 8px;
+    overflow:hidden;
+    display:-webkit-box;
+    -webkit-line-clamp:2;
+    -webkit-box-orient:vertical;
+  }
+  .current-clue strong{margin-right:6px}
+
+  .modal-backdrop{
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,.42);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    z-index:100;
+    padding:18px;
+  }
+  .modal-backdrop.show{display:flex}
+  .modal{
+    background:#fff;
+    border-radius:18px;
+    width:min(92vw,430px);
+    padding:24px;
+    box-shadow:0 20px 60px rgba(0,0,0,.25);
+    text-align:center;
+  }
+  .modal h3{font-size:27px;margin:0 0 8px}
+  .modal p{margin:0 0 20px;color:#444;line-height:1.45}
+  .modal-actions{
+    display:flex;
+    justify-content:center;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+  .pill{
+    padding:10px 16px;
+    border-radius:999px;
+    background:#eee;
+    font-weight:600;
+  }
+  .pill.primary{
+    background:var(--blue-strong);
+    color:#fff;
+  }
+
+  /* Invisible input used to summon the mobile keyboard. */
+  #kbd{
+    position:fixed;
+    opacity:0;
+    pointer-events:none;
+    width:1px;
+    height:1px;
+    left:-100px;
+    top:-100px;
+  }
+
+  @media (min-width:700px){
+    .grid-wrap{padding-top:24px}
+    .cell{font-size:36px}
+    .cluebar-inner{height:72px}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="title-wrap">
+      <h1>Mini Crossword</h1>
+    </div>
+    <div class="top-actions">
+      <div id="timer" class="timer">0:00</div>
+      <button id="checkBtn" class="icon-btn" aria-label="Check puzzle" title="Check">✓</button>
+      <button id="menuBtn" class="icon-btn" aria-label="Puzzle menu" title="Menu">⚙︎</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="grid-wrap">
+      <div id="grid" class="grid" aria-label="Crossword grid">
+<div class="cell block" data-row="0" data-col="0" aria-hidden="true"></div>
+<div class="cell block" data-row="0" data-col="1" aria-hidden="true"></div>
+<div class="cell block" data-row="0" data-col="2" aria-hidden="true"></div>
+<div class="cell" data-row="0" data-col="3" role="button" aria-label="Row 1, column 4"><span class="num">1</span><span class="letter"></span></div>
+<div class="cell block" data-row="0" data-col="4" aria-hidden="true"></div>
+<div class="cell block" data-row="0" data-col="5" aria-hidden="true"></div>
+<div class="cell block" data-row="0" data-col="6" aria-hidden="true"></div>
+<div class="cell block" data-row="0" data-col="7" aria-hidden="true"></div>
+<div class="cell block" data-row="0" data-col="8" aria-hidden="true"></div>
+<div class="cell block" data-row="0" data-col="9" aria-hidden="true"></div>
+<div class="cell block" data-row="1" data-col="0" aria-hidden="true"></div>
+<div class="cell block" data-row="1" data-col="1" aria-hidden="true"></div>
+<div class="cell" data-row="1" data-col="2" role="button" aria-label="Row 2, column 3"><span class="num">2</span><span class="letter"></span></div>
+<div class="cell" data-row="1" data-col="3" role="button" aria-label="Row 2, column 4"><span class="letter"></span></div>
+<div class="cell" data-row="1" data-col="4" role="button" aria-label="Row 2, column 5"><span class="letter"></span></div>
+<div class="cell block" data-row="1" data-col="5" aria-hidden="true"></div>
+<div class="cell" data-row="1" data-col="6" role="button" aria-label="Row 2, column 7"><span class="num">3</span><span class="letter"></span></div>
+<div class="cell block" data-row="1" data-col="7" aria-hidden="true"></div>
+<div class="cell block" data-row="1" data-col="8" aria-hidden="true"></div>
+<div class="cell block" data-row="1" data-col="9" aria-hidden="true"></div>
+<div class="cell block" data-row="2" data-col="0" aria-hidden="true"></div>
+<div class="cell block" data-row="2" data-col="1" aria-hidden="true"></div>
+<div class="cell block" data-row="2" data-col="2" aria-hidden="true"></div>
+<div class="cell" data-row="2" data-col="3" role="button" aria-label="Row 3, column 4"><span class="letter"></span></div>
+<div class="cell block" data-row="2" data-col="4" aria-hidden="true"></div>
+<div class="cell" data-row="2" data-col="5" role="button" aria-label="Row 3, column 6"><span class="num">4</span><span class="letter"></span></div>
+<div class="cell" data-row="2" data-col="6" role="button" aria-label="Row 3, column 7"><span class="letter"></span></div>
+<div class="cell" data-row="2" data-col="7" role="button" aria-label="Row 3, column 8"><span class="letter"></span></div>
+<div class="cell" data-row="2" data-col="8" role="button" aria-label="Row 3, column 9"><span class="letter"></span></div>
+<div class="cell" data-row="2" data-col="9" role="button" aria-label="Row 3, column 10"><span class="letter"></span></div>
+<div class="cell block" data-row="3" data-col="0" aria-hidden="true"></div>
+<div class="cell block" data-row="3" data-col="1" aria-hidden="true"></div>
+<div class="cell block" data-row="3" data-col="2" aria-hidden="true"></div>
+<div class="cell" data-row="3" data-col="3" role="button" aria-label="Row 4, column 4"><span class="letter"></span></div>
+<div class="cell block" data-row="3" data-col="4" aria-hidden="true"></div>
+<div class="cell block" data-row="3" data-col="5" aria-hidden="true"></div>
+<div class="cell" data-row="3" data-col="6" role="button" aria-label="Row 4, column 7"><span class="letter"></span></div>
+<div class="cell block" data-row="3" data-col="7" aria-hidden="true"></div>
+<div class="cell block" data-row="3" data-col="8" aria-hidden="true"></div>
+<div class="cell block" data-row="3" data-col="9" aria-hidden="true"></div>
+<div class="cell" data-row="4" data-col="0" role="button" aria-label="Row 5, column 1"><span class="num">5</span><span class="letter"></span></div>
+<div class="cell" data-row="4" data-col="1" role="button" aria-label="Row 5, column 2"><span class="letter"></span></div>
+<div class="cell" data-row="4" data-col="2" role="button" aria-label="Row 5, column 3"><span class="letter"></span></div>
+<div class="cell" data-row="4" data-col="3" role="button" aria-label="Row 5, column 4"><span class="letter"></span></div>
+<div class="cell" data-row="4" data-col="4" role="button" aria-label="Row 5, column 5"><span class="letter"></span></div>
+<div class="cell block" data-row="4" data-col="5" aria-hidden="true"></div>
+<div class="cell" data-row="4" data-col="6" role="button" aria-label="Row 5, column 7"><span class="letter"></span></div>
+<div class="cell block" data-row="4" data-col="7" aria-hidden="true"></div>
+<div class="cell block" data-row="4" data-col="8" aria-hidden="true"></div>
+<div class="cell block" data-row="4" data-col="9" aria-hidden="true"></div>
+<div class="cell" data-row="5" data-col="0" role="button" aria-label="Row 6, column 1"><span class="letter"></span></div>
+<div class="cell block" data-row="5" data-col="1" aria-hidden="true"></div>
+<div class="cell block" data-row="5" data-col="2" aria-hidden="true"></div>
+<div class="cell" data-row="5" data-col="3" role="button" aria-label="Row 6, column 4"><span class="letter"></span></div>
+<div class="cell block" data-row="5" data-col="4" aria-hidden="true"></div>
+<div class="cell block" data-row="5" data-col="5" aria-hidden="true"></div>
+<div class="cell" data-row="5" data-col="6" role="button" aria-label="Row 6, column 7"><span class="letter"></span></div>
+<div class="cell block" data-row="5" data-col="7" aria-hidden="true"></div>
+<div class="cell" data-row="5" data-col="8" role="button" aria-label="Row 6, column 9"><span class="num">6</span><span class="letter"></span></div>
+<div class="cell block" data-row="5" data-col="9" aria-hidden="true"></div>
+<div class="cell" data-row="6" data-col="0" role="button" aria-label="Row 7, column 1"><span class="letter"></span></div>
+<div class="cell block" data-row="6" data-col="1" aria-hidden="true"></div>
+<div class="cell block" data-row="6" data-col="2" aria-hidden="true"></div>
+<div class="cell" data-row="6" data-col="3" role="button" aria-label="Row 7, column 4"><span class="num">7</span><span class="letter"></span></div>
+<div class="cell" data-row="6" data-col="4" role="button" aria-label="Row 7, column 5"><span class="letter"></span></div>
+<div class="cell" data-row="6" data-col="5" role="button" aria-label="Row 7, column 6"><span class="letter"></span></div>
+<div class="cell" data-row="6" data-col="6" role="button" aria-label="Row 7, column 7"><span class="letter"></span></div>
+<div class="cell" data-row="6" data-col="7" role="button" aria-label="Row 7, column 8"><span class="letter"></span></div>
+<div class="cell" data-row="6" data-col="8" role="button" aria-label="Row 7, column 9"><span class="letter"></span></div>
+<div class="cell block" data-row="6" data-col="9" aria-hidden="true"></div>
+<div class="cell" data-row="7" data-col="0" role="button" aria-label="Row 8, column 1"><span class="num">8</span><span class="letter"></span></div>
+<div class="cell" data-row="7" data-col="1" role="button" aria-label="Row 8, column 2"><span class="letter"></span></div>
+<div class="cell" data-row="7" data-col="2" role="button" aria-label="Row 8, column 3"><span class="letter"></span></div>
+<div class="cell block" data-row="7" data-col="3" aria-hidden="true"></div>
+<div class="cell block" data-row="7" data-col="4" aria-hidden="true"></div>
+<div class="cell block" data-row="7" data-col="5" aria-hidden="true"></div>
+<div class="cell block" data-row="7" data-col="6" aria-hidden="true"></div>
+<div class="cell block" data-row="7" data-col="7" aria-hidden="true"></div>
+<div class="cell" data-row="7" data-col="8" role="button" aria-label="Row 8, column 9"><span class="letter"></span></div>
+<div class="cell block" data-row="7" data-col="9" aria-hidden="true"></div>
+<div class="cell" data-row="8" data-col="0" role="button" aria-label="Row 9, column 1"><span class="letter"></span></div>
+<div class="cell block" data-row="8" data-col="1" aria-hidden="true"></div>
+<div class="cell block" data-row="8" data-col="2" aria-hidden="true"></div>
+<div class="cell block" data-row="8" data-col="3" aria-hidden="true"></div>
+<div class="cell" data-row="8" data-col="4" role="button" aria-label="Row 9, column 5"><span class="num">9</span><span class="letter"></span></div>
+<div class="cell" data-row="8" data-col="5" role="button" aria-label="Row 9, column 6"><span class="letter"></span></div>
+<div class="cell" data-row="8" data-col="6" role="button" aria-label="Row 9, column 7"><span class="letter"></span></div>
+<div class="cell" data-row="8" data-col="7" role="button" aria-label="Row 9, column 8"><span class="letter"></span></div>
+<div class="cell" data-row="8" data-col="8" role="button" aria-label="Row 9, column 9"><span class="letter"></span></div>
+<div class="cell" data-row="8" data-col="9" role="button" aria-label="Row 9, column 10"><span class="letter"></span></div>
+</div>
+    </div>
+    <div id="status" class="status"></div>
+
+    <section class="clues">
+      <h2>Across</h2>
+      <div id="acrossClues"></div>
+      <h2>Down</h2>
+      <div id="downClues"></div>
+    </section>
+  </main>
+</div>
+
+<input id="kbd" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
+
+<div class="cluebar">
+  <div class="cluebar-inner">
+    <button id="prevBtn" class="nav" aria-label="Previous clue">‹</button>
+    <div id="currentClue" class="current-clue"></div>
+    <button id="nextBtn" class="nav" aria-label="Next clue">›</button>
+  </div>
+</div>
+
+<div id="menuModal" class="modal-backdrop">
+  <div class="modal">
+    <h3>Puzzle options</h3>
+    <p>Check your progress or start over. Your letters are saved automatically on this device.</p>
+    <div class="modal-actions">
+      <button id="modalCheck" class="pill primary">Check puzzle</button>
+      <button id="resetBtn" class="pill">Reset</button>
+      <button id="closeMenu" class="pill">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="winModal" class="modal-backdrop">
+  <div class="modal">
+    <h3>🎉 Nailed it!</h3>
+    <p id="winText">You finished the mini.</p>
+    <div class="modal-actions">
+      <button id="closeWin" class="pill primary">Nice</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const ROWS = 9, COLS = 10;
+
+  // # = black square. Letters are the solution.
+  const solutionRows = [
+    "###K######",
+    "##DIP#M###",
+    "###T#WATER",
+    "###T##P###",
+    "CODES#T###",
+    "H##N##A#D#",
+    "U##SIMPLE#",
+    "RHR#####L#",
+    "U###CASTLE"
+  ];
+
+  const entries = [
+    {
+      num:1, dir:"D", answer:"KITTENS", row:0, col:3,
+      clue:"They tend to explode on game night"
+    },
+    {
+      num:2, dir:"A", answer:"DIP", row:1, col:2,
+      clue:"Three-pound appetizer we brought to the Wolcott party"
+    },
+    {
+      num:3, dir:"D", answer:"MAPTAP", row:1, col:6,
+      clue:"Geography guessing game"
+    },
+    {
+      num:4, dir:"A", answer:"WATER", row:2, col:5,
+      clue:"Milestone dispenser"
+    },
+    {
+      num:5, dir:"A", answer:"CODES", row:4, col:0,
+      clue:"Things Clare and Alice love to make up"
+    },
+    {
+      num:5, dir:"D", answer:"CHURU", row:4, col:0,
+      clue:"The cats' favorite treat"
+    },
+    {
+      num:6, dir:"D", answer:"DELL", row:5, col:8,
+      clue:"Oldest laptop at LaSalle"
+    },
+    {
+      num:7, dir:"A", answer:"SIMPLE", row:6, col:3,
+      clue:"Best breakfast spot in Lake Geneva"
+    },
+    {
+      num:8, dir:"A", answer:"RHR", row:7, col:0,
+      clue:"Best burger in town, for short"
+    },
+    {
+      num:9, dir:"A", answer:"CASTLE", row:8, col:4,
+      clue:"Best place in Central Park (according to Clare)"
+    }
+  ];
+
+  const gridEl = document.getElementById("grid");
+  const kbd = document.getElementById("kbd");
+  const currentClueEl = document.getElementById("currentClue");
+  const statusEl = document.getElementById("status");
+  const timerEl = document.getElementById("timer");
+  const acrossEl = document.getElementById("acrossClues");
+  const downEl = document.getElementById("downClues");
+
+  const cells = [];
+  const cellEntries = new Map();
+  const startNumbers = new Map();
+  let selectedEntry = 0;
+  let selectedCellIndex = null;
+  let startedAt = null;
+  let elapsedBefore = 0;
+  let timerHandle = null;
+  let solved = false;
+
+  function key(r,c){ return `${r},${c}`; }
+
+  // Build entry cell lists and reverse lookup.
+  entries.forEach((e, idx) => {
+    e.cells = [];
+    for(let i=0;i<e.answer.length;i++){
+      const r = e.row + (e.dir==="D" ? i : 0);
+      const c = e.col + (e.dir==="A" ? i : 0);
+      e.cells.push([r,c]);
+      const k = key(r,c);
+      if(!cellEntries.has(k)) cellEntries.set(k, []);
+      cellEntries.get(k).push(idx);
+    }
+    const sk = key(e.row,e.col);
+    startNumbers.set(sk, e.num);
+  });
+
+  // Bind behavior to the grid that is already present in the HTML.
+  for(let r=0;r<ROWS;r++){
+    cells[r] = [];
+    for(let c=0;c<COLS;c++){
+      const div = gridEl.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`);
+      cells[r][c] = div;
+      if(solutionRows[r][c] === "#") continue;
+
+      div.addEventListener("click", () => {
+        const candidates = cellEntries.get(key(r,c)) || [];
+        if(!candidates.length) return;
+
+        if(selectedCellIndex !== null){
+          const [sr,sc] = entries[selectedEntry].cells[selectedCellIndex];
+          if(sr===r && sc===c && candidates.length>1){
+            const pos = candidates.indexOf(selectedEntry);
+            selectedEntry = candidates[(pos+1) % candidates.length];
+          }else if(!candidates.includes(selectedEntry)){
+            selectedEntry = candidates[0];
+          }
+        }else{
+          selectedEntry = candidates[0];
+        }
+
+        const e = entries[selectedEntry];
+        selectedCellIndex = e.cells.findIndex(([rr,cc]) => rr===r && cc===c);
+        beginTimer();
+        renderSelection();
+        summonKeyboard();
+      });
+    }
+  }
+
+  function renderClueLists(){
+    acrossEl.innerHTML = "";
+    downEl.innerHTML = "";
+    entries.forEach((e, idx) => {
+      const row = document.createElement("div");
+      row.className = "clue";
+      row.dataset.entry = idx;
+      row.innerHTML = `<span class="clue-num">${e.num}</span><span>${escapeHtml(e.clue)}</span>`;
+      row.addEventListener("click", () => {
+        selectedEntry = idx;
+        selectedCellIndex = firstPreferredCell(idx);
+        beginTimer();
+        renderSelection();
+        summonKeyboard();
+        document.querySelector(".grid-wrap").scrollIntoView({behavior:"smooth", block:"start"});
+      });
+      (e.dir==="A" ? acrossEl : downEl).appendChild(row);
+    });
+  }
+
+  function escapeHtml(s){
+    return s.replace(/[&<>"']/g, m => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+    })[m]);
+  }
+
+  function firstPreferredCell(entryIdx){
+    const e = entries[entryIdx];
+    let firstBlank = e.cells.findIndex(([r,c]) => !getLetter(r,c));
+    return firstBlank >= 0 ? firstBlank : 0;
+  }
+
+  function getLetter(r,c){
+    return cells[r][c].querySelector(".letter")?.textContent || "";
+  }
+  function setLetter(r,c,v){
+    const el = cells[r][c].querySelector(".letter");
+    if(el) el.textContent = v;
+  }
+
+  function renderSelection(){
+    document.querySelectorAll(".cell").forEach(el => {
+      el.classList.remove("active-entry","active-cell");
+    });
+    document.querySelectorAll(".clue").forEach(el => el.classList.remove("selected"));
+
+    const e = entries[selectedEntry];
+    e.cells.forEach(([r,c]) => cells[r][c].classList.add("active-entry"));
+
+    if(selectedCellIndex === null) selectedCellIndex = 0;
+    const [r,c] = e.cells[selectedCellIndex];
+    cells[r][c].classList.add("active-cell");
+
+    currentClueEl.innerHTML = `<strong>${e.num}${e.dir}</strong>${escapeHtml(e.clue)}`;
+    const selectedClue = document.querySelector(`.clue[data-entry="${selectedEntry}"]`);
+    if(selectedClue) selectedClue.classList.add("selected");
+  }
+
+  function summonKeyboard(){
+    kbd.value = "";
+    kbd.focus({preventScroll:true});
+  }
+
+  function handleLetter(ch){
+    if(solved) return;
+    beginTimer();
+    const e = entries[selectedEntry];
+    const [r,c] = e.cells[selectedCellIndex];
+    setLetter(r,c,ch.toUpperCase());
+    cells[r][c].classList.remove("wrong");
+    saveState();
+
+    if(selectedCellIndex < e.cells.length-1){
+      selectedCellIndex++;
+    }else{
+      // Advance to next clue if current one is complete.
+      selectedEntry = (selectedEntry+1) % entries.length;
+      selectedCellIndex = firstPreferredCell(selectedEntry);
+    }
+    renderSelection();
+    checkSolved();
+  }
+
+  function handleBackspace(){
+    if(solved) return;
+    const e = entries[selectedEntry];
+    let [r,c] = e.cells[selectedCellIndex];
+    if(getLetter(r,c)){
+      setLetter(r,c,"");
+      cells[r][c].classList.remove("wrong");
+    }else if(selectedCellIndex > 0){
+      selectedCellIndex--;
+      [r,c] = e.cells[selectedCellIndex];
+      setLetter(r,c,"");
+      cells[r][c].classList.remove("wrong");
+    }
+    saveState();
+    renderSelection();
+  }
+
+  kbd.addEventListener("input", () => {
+    const chars = kbd.value.toUpperCase().replace(/[^A-Z]/g,"");
+    if(chars){
+      for(const ch of chars) handleLetter(ch);
+    }
+    kbd.value = "";
+  });
+
+  document.addEventListener("keydown", (ev) => {
+    if(/^[a-zA-Z]$/.test(ev.key)){
+      ev.preventDefault();
+      handleLetter(ev.key);
+      return;
+    }
+    if(ev.key==="Backspace" || ev.key==="Delete"){
+      ev.preventDefault();
+      handleBackspace();
+      return;
+    }
+    if(["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(ev.key)){
+      ev.preventDefault();
+      moveByArrow(ev.key);
+    }
+  });
+
+  function moveByArrow(k){
+    const e = entries[selectedEntry];
+    let [r,c] = e.cells[selectedCellIndex];
+    if(k==="ArrowLeft") c--;
+    if(k==="ArrowRight") c++;
+    if(k==="ArrowUp") r--;
+    if(k==="ArrowDown") r++;
+    if(r<0||r>=ROWS||c<0||c>=COLS||solutionRows[r][c]==="#") return;
+
+    const candidates = cellEntries.get(key(r,c)) || [];
+    if(!candidates.length) return;
+    let preferred = selectedEntry;
+    const wantedDir = (k==="ArrowLeft"||k==="ArrowRight") ? "A" : "D";
+    const match = candidates.find(i => entries[i].dir===wantedDir);
+    if(match !== undefined) preferred = match;
+    else if(!candidates.includes(preferred)) preferred = candidates[0];
+
+    selectedEntry = preferred;
+    selectedCellIndex = entries[selectedEntry].cells.findIndex(([rr,cc]) => rr===r && cc===c);
+    renderSelection();
+  }
+
+  document.getElementById("prevBtn").addEventListener("click", () => {
+    selectedEntry = (selectedEntry - 1 + entries.length) % entries.length;
+    selectedCellIndex = firstPreferredCell(selectedEntry);
+    renderSelection();
+    summonKeyboard();
+  });
+  document.getElementById("nextBtn").addEventListener("click", () => {
+    selectedEntry = (selectedEntry + 1) % entries.length;
+    selectedCellIndex = firstPreferredCell(selectedEntry);
+    renderSelection();
+    summonKeyboard();
+  });
+
+  // Tapping the blue clue area toggles Across/Down when the selected
+  // square belongs to both an Across and a Down answer.
+  currentClueEl.addEventListener("click", () => {
+    if(selectedCellIndex === null) return;
+
+    const currentEntry = entries[selectedEntry];
+    const [r,c] = currentEntry.cells[selectedCellIndex];
+    const candidates = cellEntries.get(key(r,c)) || [];
+
+    if(candidates.length < 2){
+      summonKeyboard();
+      return;
+    }
+
+    const currentPos = candidates.indexOf(selectedEntry);
+    const otherEntryIdx = candidates[(currentPos + 1) % candidates.length];
+
+    selectedEntry = otherEntryIdx;
+    selectedCellIndex = entries[selectedEntry].cells.findIndex(
+      ([rr,cc]) => rr === r && cc === c
+    );
+
+    renderSelection();
+    summonKeyboard();
+  });
+
+  function checkPuzzle(){
+    let wrong = 0, blanks = 0;
+    for(let r=0;r<ROWS;r++){
+      for(let c=0;c<COLS;c++){
+        const sol = solutionRows[r][c];
+        if(sol==="#") continue;
+        const val = getLetter(r,c);
+        cells[r][c].classList.remove("wrong");
+        if(!val) blanks++;
+        else if(val !== sol){
+          wrong++;
+          cells[r][c].classList.add("wrong");
+        }
+      }
+    }
+    if(wrong===0 && blanks===0){
+      finishPuzzle();
+    }else if(wrong>0){
+      statusEl.textContent = `${wrong} square${wrong===1?" is":"s are"} incorrect.`;
+      statusEl.className = "status bad";
+    }else{
+      statusEl.textContent = `Everything filled so far is correct — ${blanks} square${blanks===1?" remains":"s remain"}.`;
+      statusEl.className = "status good";
+    }
+  }
+
+  function checkSolved(){
+    for(let r=0;r<ROWS;r++){
+      for(let c=0;c<COLS;c++){
+        const sol = solutionRows[r][c];
+        if(sol==="#") continue;
+        if(getLetter(r,c) !== sol) return false;
+      }
+    }
+    finishPuzzle();
+    return true;
+  }
+
+  function finishPuzzle(){
+    if(solved) return;
+    solved = true;
+    stopTimer();
+    saveState();
+    statusEl.textContent = "Puzzle complete!";
+    statusEl.className = "status good";
+    document.getElementById("winText").textContent = `You finished in ${formatTime(currentElapsed())}.`;
+    document.getElementById("winModal").classList.add("show");
+  }
+
+  function currentElapsed(){
+    return elapsedBefore + (startedAt ? Math.floor((Date.now()-startedAt)/1000) : 0);
+  }
+  function formatTime(sec){
+    const m = Math.floor(sec/60);
+    const s = sec%60;
+    return `${m}:${String(s).padStart(2,"0")}`;
+  }
+  function tick(){
+    timerEl.textContent = formatTime(currentElapsed());
+  }
+  function beginTimer(){
+    if(solved || startedAt) return;
+    startedAt = Date.now();
+    timerHandle = setInterval(tick,1000);
+    tick();
+  }
+  function stopTimer(){
+    if(startedAt){
+      elapsedBefore = currentElapsed();
+      startedAt = null;
+    }
+    if(timerHandle){
+      clearInterval(timerHandle);
+      timerHandle = null;
+    }
+    tick();
+  }
+
+  const STORAGE_KEY = "friends-mini-crossword-v1";
+  function saveState(){
+    const letters = [];
+    for(let r=0;r<ROWS;r++){
+      letters[r] = [];
+      for(let c=0;c<COLS;c++){
+        letters[r][c] = solutionRows[r][c]==="#" ? "#" : getLetter(r,c);
+      }
+    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      letters,
+      elapsed: currentElapsed(),
+      solved
+    }));
+  }
+
+  function loadState(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(!raw) return;
+      const state = JSON.parse(raw);
+      if(state.letters){
+        for(let r=0;r<ROWS;r++){
+          for(let c=0;c<COLS;c++){
+            if(solutionRows[r][c]!=="#"){
+              setLetter(r,c,state.letters?.[r]?.[c] || "");
+            }
+          }
+        }
+      }
+      elapsedBefore = Number(state.elapsed)||0;
+      solved = !!state.solved;
+      tick();
+      if(solved){
+        statusEl.textContent = "Puzzle complete!";
+        statusEl.className = "status good";
+      }
+    }catch(e){}
+  }
+
+  setInterval(() => {
+    if(startedAt && !solved) saveState();
+  }, 5000);
+
+  function resetPuzzle(){
+    stopTimer();
+    elapsedBefore = 0;
+    solved = false;
+    for(let r=0;r<ROWS;r++){
+      for(let c=0;c<COLS;c++){
+        if(solutionRows[r][c]!=="#"){
+          setLetter(r,c,"");
+          cells[r][c].classList.remove("wrong");
+        }
+      }
+    }
+    localStorage.removeItem(STORAGE_KEY);
+    statusEl.textContent = "";
+    statusEl.className = "status";
+    selectedEntry = 0;
+    selectedCellIndex = 0;
+    tick();
+    renderSelection();
+    document.getElementById("menuModal").classList.remove("show");
+  }
+
+  document.getElementById("checkBtn").addEventListener("click", checkPuzzle);
+  document.getElementById("modalCheck").addEventListener("click", () => {
+    document.getElementById("menuModal").classList.remove("show");
+    checkPuzzle();
+  });
+  document.getElementById("menuBtn").addEventListener("click", () => {
+    document.getElementById("menuModal").classList.add("show");
+  });
+  document.getElementById("closeMenu").addEventListener("click", () => {
+    document.getElementById("menuModal").classList.remove("show");
+  });
+  document.getElementById("resetBtn").addEventListener("click", () => {
+    if(confirm("Clear the whole puzzle and reset the timer?")) resetPuzzle();
+  });
+  document.getElementById("closeWin").addEventListener("click", () => {
+    document.getElementById("winModal").classList.remove("show");
+  });
+
+  // Close modals by tapping backdrop.
+  ["menuModal","winModal"].forEach(id => {
+    const el = document.getElementById(id);
+    el.addEventListener("click", ev => {
+      if(ev.target===el) el.classList.remove("show");
+    });
+  });
+
+  renderClueLists();
+  loadState();
+  selectedCellIndex = firstPreferredCell(selectedEntry);
+  renderSelection();
+  tick();
+})();
+</script>
+</body>
+</html>
