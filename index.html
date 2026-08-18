@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
 <meta name="theme-color" content="#ffffff" />
 <title>Mini Crossword</title>
 <style>
@@ -25,6 +25,7 @@
   }
   body{
     min-height:100vh;
+    min-height:100dvh;
     padding-bottom:calc(92px + env(safe-area-inset-bottom));
   }
   .app{
@@ -169,7 +170,7 @@
     position:fixed;
     left:0;
     right:0;
-    bottom:0;
+    bottom:var(--keyboard-offset, 0px);
     z-index:30;
     background:#9ed4f5;
     padding-bottom:env(safe-area-inset-bottom);
@@ -594,27 +595,86 @@
     if(selectedClue) selectedClue.classList.add("selected");
   }
 
+  function updateKeyboardOffset(){
+    const vv = window.visualViewport;
+    if(!vv){
+      document.documentElement.style.setProperty("--keyboard-offset", "0px");
+      return;
+    }
+
+    const covered = Math.max(
+      0,
+      window.innerHeight - vv.height - vv.offsetTop
+    );
+
+    document.documentElement.style.setProperty(
+      "--keyboard-offset",
+      `${Math.round(covered)}px`
+    );
+  }
+
+  if(window.visualViewport){
+    window.visualViewport.addEventListener("resize", updateKeyboardOffset);
+    window.visualViewport.addEventListener("scroll", updateKeyboardOffset);
+  }
+  window.addEventListener("resize", updateKeyboardOffset);
+  window.addEventListener("orientationchange", () => {
+    setTimeout(updateKeyboardOffset, 100);
+  });
+
   function summonKeyboard(){
     kbd.value = "";
     kbd.focus({preventScroll:true});
+    requestAnimationFrame(updateKeyboardOffset);
+    setTimeout(updateKeyboardOffset, 60);
+    setTimeout(updateKeyboardOffset, 250);
+  }
+
+  function nextEmptyCellInEntry(entryIdx, afterIndex){
+    const e = entries[entryIdx];
+    for(let i=afterIndex + 1; i<e.cells.length; i++){
+      const [r,c] = e.cells[i];
+      if(!getLetter(r,c)) return i;
+    }
+    return -1;
+  }
+
+  function nextEntryWithBlank(fromEntryIdx){
+    for(let step=1; step<=entries.length; step++){
+      const idx = (fromEntryIdx + step) % entries.length;
+      const blank = firstPreferredCell(idx);
+      const [r,c] = entries[idx].cells[blank];
+      if(!getLetter(r,c)) return { entryIdx: idx, cellIdx: blank };
+    }
+    return null;
   }
 
   function handleLetter(ch){
     if(solved) return;
     beginTimer();
+
     const e = entries[selectedEntry];
     const [r,c] = e.cells[selectedCellIndex];
+
+    // Typing on a selected square always replaces that square.
     setLetter(r,c,ch.toUpperCase());
     cells[r][c].classList.remove("wrong");
     saveState();
 
-    if(selectedCellIndex < e.cells.length-1){
-      selectedCellIndex++;
+    // Advance to the next EMPTY square in this answer, skipping
+    // letters that were already filled by crossing answers.
+    const nextBlank = nextEmptyCellInEntry(selectedEntry, selectedCellIndex);
+
+    if(nextBlank >= 0){
+      selectedCellIndex = nextBlank;
     }else{
-      // Advance to next clue if current one is complete.
-      selectedEntry = (selectedEntry+1) % entries.length;
-      selectedCellIndex = firstPreferredCell(selectedEntry);
+      const next = nextEntryWithBlank(selectedEntry);
+      if(next){
+        selectedEntry = next.entryIdx;
+        selectedCellIndex = next.cellIdx;
+      }
     }
+
     renderSelection();
     checkSolved();
   }
@@ -642,6 +702,10 @@
       for(const ch of chars) handleLetter(ch);
     }
     kbd.value = "";
+  });
+
+  kbd.addEventListener("blur", () => {
+    setTimeout(updateKeyboardOffset, 120);
   });
 
   document.addEventListener("keydown", (ev) => {
@@ -896,6 +960,7 @@
   loadState();
   selectedCellIndex = firstPreferredCell(selectedEntry);
   renderSelection();
+  updateKeyboardOffset();
   tick();
 })();
 </script>
